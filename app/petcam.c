@@ -16,20 +16,21 @@ typedef struct {
     char feeding_time[32];
     char defecation[4];
     float temperature;
-    char sleep_state[16];
+    char sleep_state[4];
     char activity_time[32];
 } PetStatus;
 
 PetStatus info = {
-    .feeding_time = "2025-06-24 08:00",
-    .defecation = "Y",
+    .feeding_time = "2025-01-01 08:00",
+    .defecation = "NO",
     .temperature = 38.5,
-    .sleep_state = "SLEEP",
-    .activity_time = "2025-06-24 07:30"
+    .sleep_state = "YES",
+    .activity_time = "2025-01-01 09:30"
 };
 
 void handle_request(const char* req, char* resp) {
     pthread_mutex_lock(&lock);
+    printf("[handle_request] %s",req);
     if (strncmp(req, "REQ,", 4) == 0) {
         int code = atoi(req + 4);
         switch (code) {
@@ -44,16 +45,16 @@ void handle_request(const char* req, char* resp) {
         int cmd = atoi(req + 4);
         switch (cmd) {
             case 1:
-                snprintf(resp, 32, "OK");
+                snprintf(resp, 32, "[petcam] 급식기, 급수기 작동 완료");
                 time_t t = time(NULL);
                 strftime(info.feeding_time, sizeof(info.feeding_time), "%Y-%m-%d %H:%M", localtime(&t));
                 break;
             case 2:
-                snprintf(resp, 32, "OK");
-                strcpy(info.defecation, "N");
+                snprintf(resp, 32, "[petcam] 배변 청소 완료");
+                strcpy(info.defecation, "NO");
                 break;
             case 3:
-                snprintf(resp, 32, "OK");
+                snprintf(resp, 32, "[petcam] 레이저 놀아주기 완료");
                 time_t a = time(NULL);
                 strftime(info.activity_time, sizeof(info.activity_time), "%Y-%m-%d %H:%M", localtime(&a));
                 break;
@@ -70,13 +71,20 @@ void handle_request(const char* req, char* resp) {
 void* sensing_input_thread(void* arg) {
     while (1) {
         int field;
-        char input[64];
-        printf("[입력 예시] 번호 [값] → 예: 2 Y 또는 3 37.5, 1 또는 5 입력 시 현재 시간 자동\n");
-        printf("센싱 데이터 입력 (1~5): ");
-        int count = scanf("%d %63s", &field, input);
-        if (count < 1) {
-            printf("입력 오류. 다시 시도하세요.\n");
-            while (getchar() != '\n'); // flush stdin
+        printf("#############################################\n");
+        printf("#         Smart Pet Care Petcam             #\n");
+        printf("#############################################\n");
+        printf("센싱 데이터 목록\n");
+        printf("1. 음식 / 물 섭취 (시간 저장)\n");
+        printf("2. 배변 감지 (Y/N 입력)\n");
+        printf("3. 체온 감지 (온도 입력)\n");
+        printf("4. 수면 감지 (Y/N 입력)\n");
+        printf("5. 움직임 감지 (시간 저장)\n");
+        printf("센싱 데이터 번호 입력 (1~5): ");
+        
+        if (scanf("%d", &field) != 1 || field < 1 || field > 5) {
+            printf("잘못된 입력입니다. 다시 시도하세요.\n");
+            while (getchar() != '\n'); // flush
             continue;
         }
 
@@ -86,31 +94,46 @@ void* sensing_input_thread(void* arg) {
             case 1:
                 now = time(NULL);
                 strftime(info.feeding_time, sizeof(info.feeding_time), "%Y-%m-%d %H:%M", localtime(&now));
-                printf("[입력됨] feeding_time = %s\n", info.feeding_time);
+                printf("[감지됨]] feeding_time = %s\n", info.feeding_time);
                 break;
-            case 2:
-                if (count == 2) strncpy(info.defecation, input, sizeof(info.defecation));
+            case 2: {
+                char yn[4];
+                printf("배변 감지 여부 (YES/NO): ");
+                scanf("%3s", yn);
+                strncpy(info.defecation, yn, sizeof(info.defecation));
+                printf("[감지됨] defecation = %s\n", info.defecation);
                 break;
-            case 3:
-                if (count == 2) info.temperature = atof(input);
+            }
+            case 3: {
+                float temp;
+                printf("체온 입력 (ex: 38.2): ");
+                scanf("%f", &temp);
+                info.temperature = temp;
+                printf("[감지됨] temperature = %.1f\n", info.temperature);
                 break;
-            case 4:
-                if (count == 2) strncpy(info.sleep_state, input, sizeof(info.sleep_state));
+            }
+            case 4: {
+                char yn[4];
+                printf("수면 상태 입력 (YES/NO): ");
+                scanf("%3s", yn);
+                strncpy(info.sleep_state, yn, sizeof(info.sleep_state));
+                printf("[감지됨] sleep_state = %s\n", info.sleep_state);
                 break;
+            }
             case 5:
                 now = time(NULL);
                 strftime(info.activity_time, sizeof(info.activity_time), "%Y-%m-%d %H:%M", localtime(&now));
-                printf("[입력됨] activity_time = %s\n", info.activity_time);
-                break;
-            default:
-                printf("잘못된 항목 번호입니다.\n");
+                printf("[감지됨] activity_time = %s\n", info.activity_time);
                 break;
         }
         pthread_mutex_unlock(&lock);
-        while (getchar() != '\n'); // flush remainder
+
+        while (getchar() != '\n'); // flush stdin
     }
     return NULL;
 }
+
+
 
 int main() {
     int fd = open("/dev/spetcom", O_RDWR);
@@ -130,14 +153,14 @@ int main() {
     char resp_buf[64] = {0};
 
     while (1) {
-        printf("[petcam] 요청 대기 중...\n");
+        printf("[main] 요청 대기 중...\n");
         read(fd, req_buf, sizeof(req_buf));
-        printf("[petcam] 수신된 요청: %s\n", req_buf);
+        printf("[main] 수신된 요청: %s\n", req_buf);
 
         handle_request(req_buf, resp_buf);
 
         write(fd, resp_buf, strlen(resp_buf));
-        printf("[petcam] 응답 전송 완료: %s\n\n", resp_buf);
+        printf("[main] 응답 전송 완료: %s\n\n", resp_buf);
         memset(req_buf, 0, sizeof(req_buf));
         memset(resp_buf, 0, sizeof(resp_buf));
     }

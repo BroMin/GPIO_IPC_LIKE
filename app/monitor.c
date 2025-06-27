@@ -10,9 +10,9 @@
 
 typedef struct {
     char feeding_time[32];      // 사료/물 섭취 시간
-    char defecation[4];         // 배변 감지 ("Y" / "N")
+    char defecation[4];         // 배변 감지 (YES/NO)
     float temperature;          // 체온
-    char sleep_state[16];       // "SLEEP" / "NON_SLEEP"
+    char sleep_state[4];       // 수면 감지 (YES/NO)
     char activity_time[32];     // 마지막 활동 시간
 } PetStatus;
 
@@ -24,7 +24,7 @@ int fd;
 
 void print_main_menu() {
     printf("#############################################\n");
-    printf("#         Smart Pet Care System             #\n");
+    printf("#         Smart Pet Care Monitor            #\n");
     printf("#############################################\n");
     printf("원하는 작업을 선택해주세요.\n");
     printf("1. 정보 모니터링\n");
@@ -38,7 +38,7 @@ void show_monitoring_info() {
     printf("\n[정보 모니터링 결과]\n");
     printf("사료/물 섭취 시간 : %s\n", info.feeding_time);
     printf("배변 감지 : %s\n", info.defecation);
-    printf("체온 : %.1f도C\n", info.temperature);
+    printf("체온 : %.1fC\n", info.temperature);
     printf("수면 상태 : %s\n", info.sleep_state);
     printf("행동 시간 : %s\n\n", info.activity_time);
 }
@@ -46,13 +46,13 @@ void show_monitoring_info() {
 void transmit_and_receive(const char* req_msg, char* recv_buf, size_t buf_size) {
     printf("DATA (GPIO 16) : OUT\n");
     printf("CLK (GPIO 17) : OUT\n");
-    printf("Transporting...\n");
+    printf("전송중...\n");
     write(fd, req_msg, strlen(req_msg));
-    printf("Transport Success!\n");
+    printf("전송완료!\n");
 
     printf("DATA (GPIO 16) : IN\n");
     printf("CLK (GPIO 17) : IN\n");
-    printf("Waiting for Information...\n");
+    printf("정보 기다리는 중...\n");
     msleep(50); 
     ssize_t r = read(fd, recv_buf, sizeof(recv_buf));
     if (r < 0) { perror("read 실패"); return; }
@@ -60,7 +60,7 @@ void transmit_and_receive(const char* req_msg, char* recv_buf, size_t buf_size) 
     recv_buf[r] = '\0'; // 안전 조치
     printf("DEBUG: recv_buf = [%s], len = %zd\n", recv_buf, r);
 
-    printf("Receiving Information Success!\n");
+    printf("정보 받기 완료!\n");
 }
 
 void request_update() {
@@ -122,7 +122,7 @@ void send_command() {
     snprintf(msg, sizeof(msg), "CMD,%02d", command);
     transmit_and_receive(msg, recv_buf, sizeof(recv_buf));
 
-    printf("%d번 명령 완료!\n\n",command);
+    printf("%s\n",recv_buf);
 }
 
 int main() {
